@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>Purchase Requests | S.R. Leather</title>
+<style>
+  :root{
+    --bg:#F5F6F8; --card:#FFFFFF; --line:#E5E7EB; --text:#111827; --muted:#6B7280; --soft:#9CA3AF;
+    --black:#111111; --green:#1F7A4D; --green-bg:#E8F5EE; --amber:#8A5A00; --amber-bg:#FFF4DB;
+    --red:#C0392B; --red-bg:#FDECEA; --blue:#1D4ED8; --blue-bg:#EEF3FF; --gray-bg:#F1F2F4;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Hiragino Sans","Noto Sans JP",sans-serif;font-size:15px;line-height:1.45}
+  .wrap{max-width:640px;margin:0 auto;padding:12px 12px 48px}
+  h1{font-size:19px;margin:6px 0 2px;font-weight:600}
+  .month{color:var(--muted);font-size:13px;margin-bottom:12px}
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .stat.wide{grid-column:1 / span 2;display:flex;justify-content:space-between;align-items:center}
+  .stat .lb{font-size:12px;color:var(--muted)}
+  .stat .vl{font-size:15px;font-weight:600}
+  .stat.wide .vl{font-size:24px}
+  .bulk{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0 0 10px}
+  .bulk label{font-size:14px;display:flex;gap:6px;align-items:center}
+  .section{font-size:13px;color:var(--muted);margin:16px 2px 6px}
+  .item{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:8px}
+  .item.act{border-color:#93A4C8;background:#FBFCFF}
+  .item.focus{border:2px solid var(--blue)}
+  .row1{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+  .no{font-weight:600;font-size:14px}
+  .amt{font-weight:600;font-size:14px;white-space:nowrap}
+  .name{font-size:15px;margin-top:2px;word-break:break-word}
+  .meta{font-size:12.5px;color:var(--muted)}
+  .badges{margin-top:6px;display:flex;gap:4px;flex-wrap:wrap}
+  .badge{font-size:12px;padding:2px 8px;border-radius:6px}
+  .b-wait{background:var(--amber-bg);color:var(--amber)}
+  .b-ok{background:var(--green-bg);color:var(--green)}
+  .b-rej{background:var(--red-bg);color:var(--red)}
+  .b-buy{background:var(--blue-bg);color:var(--blue)}
+  .b-gray{background:var(--gray-bg);color:var(--muted)}
+  .btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  button,.lbtn{font:inherit;font-size:14px;padding:9px 12px;border-radius:8px;border:1px solid #CBD0D8;background:#fff;color:var(--text);cursor:pointer;flex:1 1 auto;text-align:center;text-decoration:none;display:inline-block}
+  button.primary{background:var(--black);border-color:var(--black);color:#fff}
+  button.danger{color:var(--red);border-color:#E7B3AD}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  input[type=checkbox]{width:18px;height:18px}
+  textarea{width:100%;font:inherit;font-size:14px;padding:8px;border:1px solid #CBD0D8;border-radius:8px;margin-top:8px;min-height:64px}
+  .err{color:var(--red);font-size:13px;min-height:16px}
+  .det{margin-top:10px;border-top:1px dashed var(--line);padding-top:8px}
+  .det table{width:100%;border-collapse:collapse;font-size:13px}
+  .det td{padding:4px 6px 4px 0;vertical-align:top;word-break:break-word}
+  .det td.k{color:var(--muted);width:40%}
+  .det a{color:var(--blue)}
+  .notice{display:none;padding:10px 12px;border-radius:10px;margin-bottom:10px;font-size:14px;white-space:pre-line}
+  .notice.ok{display:block;background:var(--green-bg);color:var(--green)}
+  .notice.ng{display:block;background:var(--red-bg);color:var(--red)}
+  .notice.info{display:block;background:var(--amber-bg);color:var(--amber)}
+  .empty{color:var(--muted);text-align:center;padding:24px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 id="title"></h1>
+  <div class="month" id="month"></div>
+  <div class="notice" id="notice"></div>
+  <div id="stats"></div>
+  <div id="bulk"></div>
+  <div id="list"></div>
+</div>
+
+<script>
+  // 購入申請システム（Google Apps Script）のURL。ここからデータだけを受け取る。
+  // ログイン情報は送らない（credentials: 'omit'）ので、どのGoogleアカウントでログインしていても開ける。
+  var API_URL = 'https://script.google.com/macros/s/AKfycbyR4-yji2aVaZUBTYpSnbCDM3SXwvB3mF-CaPUt3uC49Et1ToDUrr_9lbvNtiYYqukL/exec';
+
+  // キーと申請番号は URL の # の後ろから読む（例：…/#k=キー&doc=PR-0050）
+  function readParams(){
+    var src = (location.hash || '').replace(/^#/, '') || (location.search || '').replace(/^\?/, '');
+    var out = {};
+    src.split('&').forEach(function(p){
+      var i = p.indexOf('='); if (i < 0) return;
+      try { out[decodeURIComponent(p.slice(0, i))] = decodeURIComponent(p.slice(i + 1)); } catch (e) {}
+    });
+    return out;
+  }
+  var P = readParams();
+  var KEY = String(P.k || '');
+  var FOCUS = /^PR-\d{1,6}$/.test(P.doc || '') ? P.doc : '';
+  var ROLE = '';
+  var DATA = null;
+  var NOTICE = null;
+
+  var L = {
+    ei: {
+      title: 'Purchase requests / Daftar pengajuan',
+      pend: { vp: 'Waiting for you / Menunggu Anda', office: 'To purchase / Perlu dibeli' },
+      used: 'Used this month / Terpakai', rem: 'Remaining / Sisa',
+      approve: 'Approve / Setujui', ret: 'Return / Kembalikan', decline: 'Decline / Tolak',
+      bulk: 'Approve selected / Setujui yang dipilih', all: 'All / Semua',
+      details: 'Details / Detail', close: 'Close / Tutup',
+      buy: 'Mark as purchased / Sudah dibeli',
+      reasonRet: 'Reason for return (required) / Alasan dikembalikan (wajib)',
+      reasonDec: 'Reason for decline (required) / Alasan ditolak (wajib)',
+      sendRet: 'Send return / Kirim', sendDec: 'Send decline / Kirim',
+      needReason: 'Enter a reason first. / Isi alasan dulu.',
+      confirmApprove: 'Approve this request? / Setujui permintaan ini?',
+      confirmBulk: function (n, total) { return 'Approve ' + n + ' request(s), total ' + total + '? / Setujui ' + n + ' permintaan?'; },
+      confirmBuy: 'Mark this request as purchased? / Tandai sudah dibeli?',
+      tooMany: function (n) { return 'Please select up to ' + n + ' at a time. / Pilih maksimal ' + n + ' sekaligus.'; },
+      processing: 'Processing… Please wait and do not close this page. / Sedang diproses… Mohon tunggu.',
+      sec: {
+        vp: ['Needs your approval / Perlu persetujuan Anda', '', 'Other requests this month / Lainnya bulan ini'],
+        office: ['Waiting for approval / Menunggu persetujuan', 'Needs purchase / Perlu dibeli', 'Other requests / Lainnya']
+      },
+      empty: 'No requests this month. / Tidak ada pengajuan bulan ini.',
+      s: { wvp: 'Waiting VP / Menunggu VP', wdir: 'Waiting Director / Menunggu Direktur', done: 'Approved / Disetujui', ret: 'Returned / Dikembalikan', dec: 'Declined / Ditolak' },
+      needBuy: 'Purchase needed / Perlu dibeli', bought: 'Purchased / Sudah dibeli',
+      f: { applicant: 'Requested by / Diajukan oleh', dept: 'Department / Departemen', dateFiled: 'Date filed / Tanggal', subject: 'Item / Barang', purpose: 'Purpose / Tujuan',
+           amount: 'Amount / Jumlah', amountType: 'Amount type / Jenis jumlah', category: 'Budget category / Kategori', schedule: 'Schedule / Jadwal',
+           purchaser: 'Purchaser / Pembeli', timing: 'Purchase timing / Waktu pembelian', location: 'Purchase location / Lokasi', url: 'Product URL / Link produk',
+           status: 'Status', vpAt: 'VP approved / Disetujui VP', dirAt: 'Director approved / Disetujui Direktur', reason: 'Reason / Alasan',
+           boughtAt: 'Purchased at / Dibeli pada', boughtBy: 'Marked by / Ditandai oleh' },
+      doc: { orig: 'Original document / Dokumen asli', pdf: 'Approved PDF', ja: 'Japanese version' },
+      office: 'Office (Bernadheta)', after: 'After approval / Setelah disetujui', before: 'Already bought / Sudah dibeli',
+      exact: 'Exact / Pasti', approx: 'Approximate / Perkiraan',
+      months: ['January','February','March','April','May','June','July','August','September','October','November','December']
+    },
+    ja: {
+      title: '購入申請一覧',
+      pend: { director: '承認待ち（あなた）' },
+      used: '今月の使用額', rem: '残り予算',
+      approve: '承認', ret: '差し戻し', decline: '非承認',
+      details: '詳細', close: '閉じる',
+      reasonRet: '差し戻しの理由（必須）', reasonDec: '非承認の理由（必須）',
+      sendRet: '差し戻す', sendDec: '非承認にする', needReason: '理由を入力してください。',
+      confirmApprove: 'この申請を承認します。よろしいですか？',
+      processing: '処理中です。このままお待ちください（画面を閉じないでください）。',
+      sec: { director: ['要承認', '', '参考（承認不要）'] },
+      empty: '今月の申請はありません。',
+      s: { wvp: '副社長承認待ち', wdir: '役員承認待ち', done: '承認済み', ret: '差し戻し', dec: '非承認' },
+      needBuy: '購入待ち', bought: '購入済み',
+      f: { applicant: '申請者', dept: '部署', dateFiled: '申請日', subject: '品名', purpose: '目的', amount: '金額', amountType: '金額区分',
+           category: '予算区分', schedule: '希望時期', purchaser: '購入者', timing: '購入タイミング', location: '購入先', url: '商品URL',
+           status: '状況', vpAt: '副社長承認日', dirAt: '役員承認日', reason: '理由', boughtAt: '購入日時', boughtBy: '購入済みにした人' },
+      doc: { orig: '原本（インドネシア語）', pdf: '承認済みPDF', ja: '日本語版' },
+      office: '購入担当者（経理）', after: '承認後に購入', before: '事前購入（購入済み）', exact: '正確な金額', approx: 'おおよその金額'
+    }
+  };
+  var LANG = 'ei';
+  var T = L[LANG];
+  function setRole(r){ ROLE = r; LANG = (r === 'director') ? 'ja' : 'ei'; T = L[LANG];
+    document.title = LANG === 'ja' ? '購入申請一覧 | S.R. Leather' : 'Purchase Requests | S.R. Leather';
+    document.documentElement.lang = LANG === 'ja' ? 'ja' : 'en'; }
+
+  var CAT = {
+    'Daily Supplies / Office Supplies': { ei: 'Office supplies / Perlengkapan kantor', ja: '消耗品・事務用品' },
+    'Equipment / Machinery': { ei: 'Equipment / Peralatan', ja: '設備・機械' },
+    'Raw Materials': { ei: 'Raw materials / Bahan baku', ja: '原材料' },
+    'Others': { ei: 'Others / Lainnya', ja: 'その他' }
+  };
+  var SCHED_JA = { 'Needed Immediately': '至急', 'Within 1 Week': '1週間以内', 'Anytime': 'いつでも可' };
+
+  var open = {}, reasonOpen = {}, sel = {}, busy = false;
+
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function idr(n){ return 'IDR ' + Math.round(Number(n) || 0).toLocaleString('en-US'); }
+  function safeUrl(u){ return /^https?:\/\//i.test(String(u || '')) ? String(u) : ''; }
+
+  function statusKey(s){
+    if (s === 'Pending VP Approval') return 'wvp';
+    if (s === 'Pending Director Approval') return 'wdir';
+    if (s === 'Completed') return 'done';
+    if (s === 'Declined') return 'dec';
+    if (/^Rejected/.test(s)) return 'ret';
+    return '';
+  }
+  function isOffice(p){ return /purchasing staff/i.test(p || ''); }
+  function catText(c){ var m = CAT[c]; if (!m) return c || '-'; return LANG === 'ja' ? m.ja : m.ei; }
+  function schedText(s){
+    if (LANG !== 'ja') return s || '-';
+    for (var k in SCHED_JA) if (String(s || '').indexOf(k) === 0) return SCHED_JA[k];
+    return s || '-';
+  }
+  function purchaserText(p){ return isOffice(p) ? T.office : (p || '-'); }
+  function timingText(w){ if (/after/i.test(w || '')) return T.after; if (/before/i.test(w || '')) return T.before; return w || '-'; }
+  function amountTypeText(t){ return t === 'Exact' ? T.exact : (t ? T.approx : '-'); }
+  function itemName(r){ return LANG === 'ja' ? (r.subjectJa || r.subject) : r.subject; }
+  function itemPurpose(r){ return LANG === 'ja' ? (r.purposeJa || r.purpose) : r.purpose; }
+
+  function badges(r){
+    var k = statusKey(r.status), cls = { wvp: 'b-wait', wdir: 'b-wait', done: 'b-ok', ret: 'b-rej', dec: 'b-gray' }[k] || 'b-gray';
+    var h = '<span class="badge ' + cls + '">' + esc(k ? T.s[k] : r.status) + '</span>';
+    if (k === 'done' && isOffice(r.purchaseWho)) {
+      if (r.purchasedAt || /before/i.test(r.purchaseWhen)) h += '<span class="badge b-ok">' + esc(T.bought) + '</span>';
+      else h += '<span class="badge b-buy">' + esc(T.needBuy) + '</span>';
+    }
+    return h;
+  }
+
+  function showNotice(kind, msg){
+    var n = $('notice'); n.className = 'notice ' + kind; n.textContent = msg;
+    window.scrollTo(0, 0);
+  }
+
+  function callApi(method, params){
+    var body = new URLSearchParams();
+    params.api = '1';
+    for (var n in params) body.append(n, params[n]);
+    var opt = { method: method, credentials: 'omit', redirect: 'follow', cache: 'no-store' };
+    var url = API_URL;
+    if (method === 'GET') url += '?' + body.toString() + '&_=' + Date.now();
+    else opt.body = body;
+    return fetch(url, opt).then(function(res){
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.text();
+    }).then(function(txt){
+      try { return JSON.parse(txt); } catch (e) { throw new Error('Bad response'); }
+    });
+  }
+
+  /** ボタンの操作をサーバーに送り、結果と最新の一覧を受け取る */
+  function submitAction(action, docs, reason){
+    if (busy) return;
+    busy = true;
+    render();
+    showNotice('info', T.processing);
+    callApi('POST', { k: KEY, action: action, docs: docs.join(','), reason: reason || '' }).then(function(res){
+      busy = false;
+      if (res && res.invalid) { DATA = res; render(); showNotice('ng', res.error); return; }
+      if (res && res.data) { DATA = res.data; }
+      sel = {}; reasonOpen = {};
+      render();
+      var nt = (res && res.notice) || { kind: 'ng', msg: 'Error' };
+      showNotice(nt.kind === 'ok' ? 'ok' : 'ng', nt.msg);
+    }).catch(function(err){
+      busy = false;
+      render();
+      showNotice('ng', (LANG === 'ja'
+        ? '通信に失敗しました。結果が反映されているか、ページを読み込み直して確認してください。'
+        : 'Connection failed. Please reload the page and check whether it was processed. / Koneksi gagal. Muat ulang halaman dan periksa.') + ' (' + err.message + ')');
+    });
+  }
+
+  function render(){
+    var d = DATA;
+    $('title').textContent = T.title;
+    if (!d || !d.ok) { $('list').innerHTML = '<div class="empty">' + esc((d && d.error) || 'Error') + '</div>'; return; }
+    var m = d.month.split('-');
+    $('month').textContent = LANG === 'ja' ? (m[0] + '年' + Number(m[1]) + '月') : (T.months[Number(m[1]) - 1] + ' ' + m[0]);
+    var pend = d.rows.filter(function(r){ return r.actionable; }).length;
+    $('stats').innerHTML = '<div class="stats">' +
+      '<div class="stat wide"><span class="lb">' + esc(T.pend[ROLE]) + '</span><span class="vl">' + pend + '</span></div>' +
+      '<div class="stat"><div class="lb">' + esc(T.used) + '</div><div class="vl">' + idr(d.budget.used) + '</div></div>' +
+      '<div class="stat"><div class="lb">' + esc(T.rem) + '</div><div class="vl">' + idr(Math.max(0, d.budget.remaining)) + '</div></div></div>';
+
+    if (ROLE === 'vp' && pend > 0) {
+      var n = Object.keys(sel).filter(function(k){ return sel[k]; }).length;
+      var allOn = n > 0 && n === pend;
+      $('bulk').innerHTML = '<div class="bulk"><label><input type="checkbox" id="allChk"' + (allOn ? ' checked' : '') + (busy ? ' disabled' : '') + '> ' + esc(T.all) + '</label>' +
+        '<button class="primary" id="bulkBtn" style="flex:0 1 auto"' + (busy || !n ? ' disabled' : '') + '>' + esc(T.bulk) + ' (' + n + ')</button></div>';
+      $('allChk').onchange = function(){
+        var on = this.checked; sel = {};
+        if (on) d.rows.forEach(function(r){ if (r.actionable) sel[r.docNo] = true; });
+        render();
+      };
+      $('bulkBtn').onclick = bulkApprove;
+    } else {
+      $('bulk').innerHTML = '';
+    }
+
+    if (!d.rows.length) { $('list').innerHTML = '<div class="empty">' + esc(T.empty) + '</div>'; return; }
+    var secs = T.sec[ROLE], shown = {}, h = '';
+    d.rows.forEach(function(r){
+      var g = r.group;
+      if (!shown[g] && secs[g]) { h += '<div class="section">' + esc(secs[g]) + '</div>'; shown[g] = true; }
+      h += itemHtml(r);
+    });
+    $('list').innerHTML = h;
+    bind();
+  }
+
+  function itemHtml(r){
+    var no = esc(r.docNo), a = r.actionable, dis = busy ? ' disabled' : '';
+    var h = '<div class="item' + (a ? ' act' : '') + (r.docNo === FOCUS ? ' focus' : '') + '" id="it-' + no + '"><div class="row1">';
+    if (ROLE === 'vp' && a) h += '<input type="checkbox" data-sel="' + no + '"' + (sel[r.docNo] ? ' checked' : '') + dis + ' style="margin:2px 8px 0 0">';
+    h += '<div style="flex:1;min-width:0"><div class="row1"><span class="no">' + no + '</span><span class="amt">' + idr(r.amount) + '</span></div>' +
+      '<div class="name">' + esc(itemName(r)) + '</div>' +
+      '<div class="meta">' + esc(r.applicant) + ' · ' + esc(r.dateFiled) + '</div>' +
+      '<div class="badges">' + badges(r) + '</div>';
+
+    h += '<div class="btns">';
+    if (a && (ROLE === 'vp' || ROLE === 'director')) {
+      h += '<button class="primary" data-act="approve" data-no="' + no + '"' + dis + '>' + esc(T.approve) + '</button>' +
+           '<button data-open="reject" data-no="' + no + '"' + dis + '>' + esc(T.ret) + '</button>' +
+           '<button class="danger" data-open="decline" data-no="' + no + '"' + dis + '>' + esc(T.decline) + '</button>';
+    }
+    if (a && ROLE === 'office') {
+      h += '<button class="primary" data-act="purchased" data-no="' + no + '"' + dis + '>' + esc(T.buy) + '</button>';
+    }
+    h += '<button data-det="' + no + '">' + esc(open[r.docNo] ? T.close : T.details) + '</button></div>';
+
+    var ro = reasonOpen[r.docNo];
+    if (ro) {
+      h += '<textarea id="rs-' + no + '" placeholder="' + esc(ro === 'reject' ? T.reasonRet : T.reasonDec) + '"></textarea>' +
+        '<div class="err" id="er-' + no + '"></div>' +
+        '<button class="' + (ro === 'decline' ? 'danger' : '') + '" data-send="' + ro + '" data-no="' + no + '" style="width:100%"' + dis + '>' + esc(ro === 'reject' ? T.sendRet : T.sendDec) + '</button>';
+    }
+    if (open[r.docNo]) h += detailHtml(r);
+    h += '</div></div></div>';
+    return h;
+  }
+
+  function detailHtml(r){
+    var F = T.f, k = statusKey(r.status);
+    var rows = [
+      [F.applicant, r.applicant], [F.dept, r.department], [F.dateFiled, r.dateFiled], [F.subject, itemName(r)],
+      [F.purpose, itemPurpose(r)], [F.amount, idr(r.amount)], [F.amountType, amountTypeText(r.amountType)],
+      [F.category, catText(r.budgetCategory)], [F.schedule, schedText(r.schedule)], [F.purchaser, purchaserText(r.purchaseWho)],
+      [F.timing, timingText(r.purchaseWhen)], [F.location, r.purchaseLocation], [F.status, k ? T.s[k] : r.status],
+      [F.vpAt, r.vpApprovedAt], [F.dirAt, r.directorApprovedAt], [F.reason, r.rejectReason],
+      [F.boughtAt, r.purchasedAt], [F.boughtBy, r.purchasedBy]
+    ];
+    var h = '<div class="det"><table>';
+    rows.forEach(function(x){ if (x[1]) h += '<tr><td class="k">' + esc(x[0]) + '</td><td>' + esc(x[1]) + '</td></tr>'; });
+    var pu = safeUrl(r.productUrl);
+    if (pu) h += '<tr><td class="k">' + esc(F.url) + '</td><td><a href="' + esc(pu) + '" target="_blank" rel="noopener">' + esc(pu) + '</a></td></tr>';
+    h += '</table><div class="btns">';
+    var docs = [];
+    if (LANG === 'ja' && safeUrl(r.jpVersionUrl)) docs.push([T.doc.ja, r.jpVersionUrl]);
+    if (safeUrl(r.pdfUrl)) docs.push([T.doc.pdf, r.pdfUrl]);
+    else if (safeUrl(r.originalUrl)) docs.push([T.doc.orig, r.originalUrl]);
+    if (LANG !== 'ja' && safeUrl(r.jpVersionUrl)) docs.push([T.doc.ja, r.jpVersionUrl]);
+    docs.forEach(function(x){ h += '<a class="lbtn" href="' + esc(x[1]) + '" target="_blank" rel="noopener">' + esc(x[0]) + '</a>'; });
+    h += '</div></div>';
+    return h;
+  }
+
+  function bind(){
+    var list = $('list');
+    list.querySelectorAll('[data-sel]').forEach(function(e){ e.onchange = function(){ sel[e.dataset.sel] = e.checked; render(); }; });
+    list.querySelectorAll('[data-det]').forEach(function(e){ e.onclick = function(){ open[e.dataset.det] = !open[e.dataset.det]; render(); }; });
+    list.querySelectorAll('[data-open]').forEach(function(e){ e.onclick = function(){
+      var no = e.dataset.no; reasonOpen[no] = (reasonOpen[no] === e.dataset.open) ? null : e.dataset.open; render();
+      var t = $('rs-' + no); if (t) t.focus();
+    }; });
+    list.querySelectorAll('textarea').forEach(function(t){ t.oninput = function(){ var er = $('er-' + t.id.slice(3)); if (er) er.textContent = ''; }; });
+    list.querySelectorAll('[data-act]').forEach(function(e){ e.onclick = function(){
+      var no = e.dataset.no, act = e.dataset.act;
+      if (!confirm((act === 'purchased' ? T.confirmBuy : T.confirmApprove) + '\n' + no)) return;
+      submitAction(act, [no], '');
+    }; });
+    list.querySelectorAll('[data-send]').forEach(function(e){ e.onclick = function(){
+      var no = e.dataset.no, t = $('rs-' + no), reason = t ? t.value.trim() : '';
+      if (!reason) { $('er-' + no).textContent = T.needReason; return; }
+      submitAction(e.dataset.send, [no], reason);
+    }; });
+  }
+
+  function bulkApprove(){
+    if (busy) return;
+    var list = DATA.rows.filter(function(r){ return r.actionable && sel[r.docNo]; });
+    if (!list.length) return;
+    var max = DATA.bulkMax || 10;
+    if (list.length > max) { showNotice('ng', T.tooMany(max)); return; }
+    var total = list.reduce(function(s, r){ return s + (Number(r.amount) || 0); }, 0);
+    if (!confirm(T.confirmBulk(list.length, idr(total)) + '\n' + list.map(function(r){ return r.docNo; }).join(', '))) return;
+    submitAction('approve', list.map(function(r){ return r.docNo; }), '');
+  }
+
+  // 最初の表示：データを受け取ってから描く
+  function load(){
+    if (KEY.length < 20) { $('list').innerHTML = '<div class="empty">This link is invalid. / Tautan ini tidak valid. / このリンクは無効です。</div>'; return; }
+    $('list').innerHTML = '<div class="empty">Loading… / Memuat… / 読み込み中…</div>';
+    callApi('GET', { k: KEY }).then(function(res){
+      if (res && res.invalid) { $('list').innerHTML = '<div class="empty">' + esc(res.error) + '</div>'; return; }
+      setRole(res.role || '');
+      DATA = res;
+      var scrollTo = '';
+      if (FOCUS && DATA.ok && DATA.rows.some(function(r){ return r.docNo === FOCUS; })) { open[FOCUS] = true; scrollTo = FOCUS; }
+      render();
+      if (scrollTo) { var el = $('it-' + scrollTo); if (el) el.scrollIntoView({ block: 'start' }); }
+    }).catch(function(err){
+      $('list').innerHTML = '<div class="empty">Could not load. Please reload. / Gagal memuat, muat ulang. / 読み込めませんでした。再読み込みしてください。<br>(' + esc(err.message) + ')</div>' +
+        '<div style="text-align:center"><button onclick="load()" style="flex:0 0 auto">Reload / Muat ulang / 再読み込み</button></div>';
+    });
+  }
+  window.addEventListener('hashchange', function(){ P = readParams(); KEY = String(P.k || ''); FOCUS = /^PR-\d{1,6}$/.test(P.doc || '') ? P.doc : ''; open = {}; sel = {}; reasonOpen = {}; load(); });
+  load();
+</script>
+</body>
+</html>
